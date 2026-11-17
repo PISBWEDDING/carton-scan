@@ -61,6 +61,15 @@
   .alert-note { margin-top:12px; font-size:14px; font-weight:700; }
   .alert-card button { width:100%; margin-top:16px; padding:16px; font-size:18px; font-weight:800; border:0; border-radius:12px; background:var(--brand); color:#fff; }
   .alert-pause { margin-top:8px; font-size:13px; color:var(--muted); text-align:center; }
+  .toast { position:fixed; left:50%; top:38%; transform:translate(-50%,-50%) scale(.9); z-index:60; min-width:260px; max-width:86vw;
+    padding:22px 26px; border-radius:20px; text-align:center; color:#fff; background:#16a34a; box-shadow:0 12px 40px rgba(0,0,0,.35);
+    pointer-events:none; opacity:0; transition:opacity .15s, transform .15s; }
+  .toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  .toast.dup { background:#d97706; }
+  .toast .tk { font-size:54px; line-height:1; font-weight:900; }
+  .toast .tt { font-size:24px; font-weight:900; margin-top:6px; letter-spacing:.5px; }
+  .toast .tc { font-size:20px; font-weight:800; margin-top:6px; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .toast .ts { font-size:15px; font-weight:600; margin-top:4px; opacity:.95; }
   @keyframes shake { 0%,100% { transform:translateX(0); } 20%,60% { transform:translateX(-8px); } 40%,80% { transform:translateX(8px); } }
 </style>
 </head>
@@ -130,6 +139,7 @@
   </div>
 </main>
 
+<div id="toast" class="toast" role="status" aria-live="polite"><div class="tk" id="toastK">&#10003;</div><div class="tt" id="toastT">SCAN SUCCESSFUL</div><div class="tc" id="toastC"></div><div class="ts" id="toastS"></div></div>
 <div id="alertBox" class="alert-ov hidden" role="alertdialog" aria-modal="true">
   <div class="alert-card" id="alertCard">
     <div class="alert-title" id="alertTitle"></div>
@@ -379,7 +389,7 @@ function enqueueScan(raw, manual) {
       S.count[d.result] = (S.count[d.result] || 0) + 1;
       addResult(id, d);
       var al = alertFor(d);
-      if (al) pushAlert(al); else feedback(d.result);
+      if (al) pushAlert(al); else { feedback(d.result); showToast(d, req.action); }
     }, function (e) {
       addResult(id, { result: 'ERROR', cartonId: raw.toUpperCase(), message: (e && e.error) || 'Not saved - scan again.' });
       feedback('REJECTED');
@@ -450,6 +460,22 @@ function tone(freq, start, dur, type) {
   AUDIO = AUDIO || new (window.AudioContext || window.webkitAudioContext)();
   var o = AUDIO.createOscillator(), g = AUDIO.createGain(), t = AUDIO.currentTime + start;
   o.type = type || 'sine'; o.frequency.value = freq; g.gain.value = 0.15; o.connect(g); g.connect(AUDIO.destination); o.start(t); o.stop(t + dur);
+}
+// Big pop-up after each scan: green = saved, orange = already scanned. Does not stop scanning.
+var TOAST_T = null;
+function showToast(d, action) {
+  if (d.result !== 'OK' && d.result !== 'DUPLICATE') return;
+  var ok = d.result === 'OK';
+  var what = { PICKUP: 'Pickup', HANDOVER: 'Take over', RECEIVE: 'Receive' }[action] || '';
+  $('toast').classList.toggle('dup', !ok);
+  $('toastK').innerHTML = ok ? '&#10003;' : '&#8635;';
+  $('toastT').textContent = ok ? 'SCAN SUCCESSFUL' : 'ALREADY SCANNED';
+  $('toastC').textContent = d.cartonId || '';
+  var p = d.progress;
+  $('toastS').textContent = ok ? (what + ' OK' + (p && action === 'RECEIVE' ? ' \u00b7 ' + p.delivered + '/' + p.total + ' received' : '')) : 'No need to scan again';
+  $('toast').classList.add('show');
+  clearTimeout(TOAST_T);
+  TOAST_T = setTimeout(function () { $('toast').classList.remove('show'); }, ok ? 1600 : 1300);
 }
 function feedback(result) {
   try {

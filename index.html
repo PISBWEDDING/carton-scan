@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Carton Tracker - Camera Scan</title>
+<style>
+  :root { --ink:#16181d; --muted:#6b7280; --line:#e5e7eb; --bg:#f6f7f9; --brand:#111827; --ok:#15803d; --bad:#b91c1c; --red:#dc2328; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; color:var(--ink); background:var(--bg); font-size:16px; }
+  header { background:#fff; padding:8px 14px; display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid var(--red); position:sticky; top:0; z-index:5; }
+  header .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:17px; }
+  header .brand img { height:38px; }
+  header .who { font-size:12px; color:var(--muted); text-align:right; line-height:1.3; }
+  header .who b { color:var(--ink); }
+  main { max-width:560px; margin:0 auto; padding:12px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  label { display:block; font-size:13px; font-weight:600; color:var(--muted); margin:10px 0 5px; }
+  input, select { width:100%; font-size:17px; padding:11px; border:1px solid #d1d5db; border-radius:10px; background:#fff; color:var(--ink); font-family:inherit; }
+  input.locked { background:#f3f4f6; font-weight:700; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .seg { display:flex; gap:6px; }
+  .seg button { flex:1; padding:13px 4px; border-radius:12px; border:2px solid #d1d5db; background:#fff; font-size:15px; font-weight:800; color:#374151; }
+  .seg button.on.pick { border-color:#c2410c; background:#fff7ed; color:#c2410c; }
+  .seg button.on.recv { border-color:#15803d; background:#f0fdf4; color:#15803d; }
+  .seg button.on.hand { border-color:#1d4ed8; background:#eff6ff; color:#1d4ed8; }
+  .btn { display:block; width:100%; border:0; border-radius:12px; padding:14px; font-size:17px; font-weight:800; background:var(--red); color:#fff; text-align:center; text-decoration:none; }
+  .btn.dark { background:var(--brand); }
+  .btn.sec { background:#fff; color:var(--ink); border:1px solid #d1d5db; }
+  .btn.small { width:auto; padding:9px 14px; font-size:14px; }
+  .muted { color:var(--muted); font-size:13px; }
+  .msg { padding:11px 13px; border-radius:10px; margin-top:10px; font-size:15px; }
+  .msg.bad { background:#fef2f2; color:var(--bad); border:1px solid #fecaca; }
+  .msg.info { background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; }
+  .hidden { display:none !important; }
+  .cam { position:relative; background:#000; border-radius:14px; overflow:hidden; aspect-ratio:4/3; }
+  .cam video { width:100%; height:100%; object-fit:cover; display:block; }
+  .cam .guide { position:absolute; left:8%; right:8%; top:32%; bottom:32%; border:3px solid rgba(255,255,255,.85); border-radius:10px; box-shadow:0 0 0 2000px rgba(0,0,0,.25); transition:border-color .15s; }
+  .cam .guide.hit { border-color:#22c55e; }
+  .cam .state { position:absolute; left:0; right:0; bottom:0; padding:8px 10px; color:#fff; font-size:14px; font-weight:700; background:linear-gradient(transparent, rgba(0,0,0,.7)); }
+  .cam .torch { position:absolute; top:8px; right:8px; background:rgba(0,0,0,.55); color:#fff; border:1px solid rgba(255,255,255,.4); border-radius:10px; padding:7px 10px; font-size:13px; font-weight:700; }
+  .cam .start { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .res { border-left:5px solid #9ca3af; background:#f9fafb; border-radius:8px; padding:9px 11px; margin-top:8px; font-size:14px; }
+  .res.OK { border-color:#16a34a; background:#f0fdf4; }
+  .res.DUPLICATE { border-color:#d97706; background:#fffbeb; }
+  .res.REJECTED, .res.ERROR { border-color:#dc2626; background:#fef2f2; }
+  .res .cid { font-family:ui-monospace,Menlo,monospace; font-weight:800; }
+  .res .tag { float:right; font-size:12px; font-weight:800; }
+  .sev-MEDIUM { color:#b45309; font-weight:800; }
+  .alert-ov { position:fixed; inset:0; background:rgba(17,24,39,.72); z-index:50; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .alert-card { background:#fff; border-radius:16px; max-width:460px; width:100%; padding:20px; border-top:14px solid var(--bad); box-shadow:0 10px 40px rgba(0,0,0,.35); animation:shake .4s; }
+  .alert-card.warn { border-top-color:#f59e0b; }
+  .alert-title { font-size:22px; font-weight:800; color:var(--bad); line-height:1.25; }
+  .alert-card.warn .alert-title { color:#b45309; }
+  .alert-cid { font-family:ui-monospace,Menlo,monospace; font-size:24px; font-weight:800; margin:10px 0; }
+  .alert-body { font-size:16px; line-height:1.5; }
+  .alert-note { margin-top:12px; font-size:14px; font-weight:700; }
+  .alert-card button { width:100%; margin-top:16px; padding:16px; font-size:18px; font-weight:800; border:0; border-radius:12px; background:var(--brand); color:#fff; }
+  .alert-pause { margin-top:8px; font-size:13px; color:var(--muted); text-align:center; }
+  @keyframes shake { 0%,100% { transform:translateX(0); } 20%,60% { transform:translateX(-8px); } 40%,80% { transform:translateX(8px); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><img alt="PISB" src="data:image/jpeg;base64,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">Camera Scan</div>
+  <div class="who" id="who"></div>
+</header>
+<main>
+  <div id="startView" class="card">
+    <div id="startMsg" class="msg info">Opening…</div>
+    <a class="btn dark" id="backLink" href="https://script.google.com/macros/s/AKfycbwjt93lOBuQazCYolEepdole-W-nH1Q3mo1-ERYW1f4RLy4k55wNMrff_FRv4xTuwnS/exec" style="margin-top:12px">Open Carton Tracker</a>
+  </div>
+
+  <div id="appView" class="hidden">
+    <div class="card">
+      <div class="seg">
+        <button id="mPick" class="pick hidden" onclick="setMode('PICKUP')">Pickup</button>
+        <button id="mHand" class="hand hidden" onclick="setMode('HANDOVER')">Take over</button>
+        <button id="mRecv" class="recv hidden" onclick="setMode('RECEIVE')">Receive</button>
+      </div>
+      <div class="muted" id="sWhere" style="margin-top:8px"></div>
+      <label>Your Staff ID <span id="lockHint" class="muted"></span></label>
+      <input id="sStaff" autocapitalize="characters" maxlength="20" placeholder="e.g. S003" autocomplete="off">
+      <div id="sCarrierBox" class="hidden">
+        <label>Lorry No.</label>
+        <input id="sCarrier" autocapitalize="characters" maxlength="15" placeholder="e.g. JPK1234" autocomplete="off" oninput="tripPreview()">
+        <div class="muted" id="sTrip" style="margin-top:4px"></div>
+      </div>
+      <div id="sLocBox" class="hidden">
+        <label>Scan location</label>
+        <select id="sLoc"></select>
+      </div>
+      <div id="sStatus"></div>
+    </div>
+
+    <div class="cam" id="cam">
+      <video id="video" playsinline muted></video>
+      <div class="guide" id="guide"></div>
+      <div class="state" id="camState">Camera off</div>
+      <button class="torch hidden" id="torchBtn" onclick="toggleTorch()">Light</button>
+      <div class="start" id="camStart"><button class="btn" onclick="startCamera()">Start camera</button></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="sInput" autocapitalize="characters" autocomplete="off" placeholder="Or type Carton ID + Enter">
+      <button class="btn small dark" onclick="submitTyped()">OK</button>
+    </div>
+
+    <div class="card" style="margin-top:12px">
+      <div class="row" style="justify-content:space-between"><b>This session</b><span class="muted" id="sCounts"></span></div>
+      <div id="sList"><div class="muted" style="margin-top:8px">Nothing scanned yet.</div></div>
+    </div>
+    <a class="btn sec" href="https://script.google.com/macros/s/AKfycbwjt93lOBuQazCYolEepdole-W-nH1Q3mo1-ERYW1f4RLy4k55wNMrff_FRv4xTuwnS/exec">Back to Carton Tracker</a>
+  </div>
+</main>
+
+<div id="alertBox" class="alert-ov hidden" role="alertdialog" aria-modal="true">
+  <div class="alert-card" id="alertCard">
+    <div class="alert-title" id="alertTitle"></div>
+    <div class="alert-cid" id="alertCid"></div>
+    <div class="alert-body" id="alertBody"></div>
+    <div class="alert-note" id="alertNote"></div>
+    <button type="button" id="alertOk" tabindex="-1">OK, got it</button>
+    <div class="alert-pause">Scanning is paused - tap the button to continue</div>
+  </div>
+</div>
+
+<script>
+var API_URL = 'https://script.google.com/macros/s/AKfycbzbuh3QeI6XJSkYxTpj4BYbwlQqcqPC6kXNneXHEbYX6o37sS_33bAAMQ_quSZb1i81/exec';
+var S = { token: null, user: null, perms: null, locations: [], mode: null, queue: Promise.resolve(), count: { OK: 0, DUPLICATE: 0, REJECTED: 0 }, alerts: [] };
+function $(id) { return document.getElementById(id); }
+function show(id) { $(id).classList.remove('hidden'); }
+function hide(id) { $(id).classList.add('hidden'); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function msg(id, text, kind) { $(id).innerHTML = text ? '<div class="msg ' + (kind || 'bad') + '">' + text + '</div>' : ''; }
+function store(k, v) { try { if (v == null) sessionStorage.removeItem(k); else sessionStorage.setItem(k, v); } catch (e) {} }
+function load(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
+function locName(id) { for (var i = 0; i < S.locations.length; i++) if (S.locations[i].id === id) return S.locations[i].name; return ''; }
+
+// ---------- API (same session token as the main app) ----------
+function call(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return fetch(API_URL, { method: 'POST', body: JSON.stringify({ fn: fn, args: args }), redirect: 'follow' })
+    .then(function (r) { if (!r.ok) throw { error: 'Server error ' + r.status }; return r.json(); })
+    .then(function (r) {
+      if (r && r.ok) return r.data;
+      if (r && r.extra && r.extra.auth) sessionOver();
+      throw r || { error: 'Unknown error' };
+    }, function (e) { throw (e && e.error) ? e : { error: 'No connection - check internet.' }; });
+}
+function callWithRetry(fn, args, tries) {
+  return call.apply(null, [fn].concat(args)).catch(function (e) {
+    if (tries > 0 && !(e && e.ok === false)) return new Promise(function (r) { setTimeout(r, 1500); }).then(function () { return callWithRetry(fn, args, tries - 1); });
+    throw e;
+  });
+}
+function sessionOver() {
+  stopCamera(); store('scan_token', null);
+  hide('appView'); show('startView');
+  msg('startMsg', 'Session expired. Open the camera scanner again from the Scan page of Carton Tracker.', 'bad');
+}
+
+// ---------- start ----------
+(function boot() {
+  var h = new URLSearchParams(location.hash.slice(1));
+  var t = h.get('s');
+  if (t) { store('scan_token', t); history.replaceState(null, '', location.pathname + location.search); }
+  S.token = t || load('scan_token');
+  S.firstMode = h.get('m');
+  if (!S.token) { msg('startMsg', 'Open the camera scanner from the <b>Scan</b> page of Carton Tracker.', 'info'); return; }
+  call('apiBootstrap', S.token).then(function (d) {
+    S.user = d.user; S.perms = d.perms; S.locations = d.locations;
+    if (!(S.perms.pickup || S.perms.receive || S.perms.handover)) { msg('startMsg', 'Your account cannot scan cartons.', 'bad'); return; }
+    $('who').innerHTML = '<b>' + esc(d.user.name) + '</b><br>' + esc(d.user.role) + (d.user.locationId ? ' · ' + esc(d.user.locationId) : '');
+    hide('startView'); show('appView');
+    if (d.user.staffId) { $('sStaff').value = d.user.staffId; $('sStaff').readOnly = true; $('sStaff').classList.add('locked'); $('lockHint').textContent = '· locked to your Gmail'; }
+    else $('sStaff').value = load('scan_staff') || '';
+    $('mPick').classList.toggle('hidden', !S.perms.pickup);
+    $('mHand').classList.toggle('hidden', !S.perms.handover);
+    $('mRecv').classList.toggle('hidden', !S.perms.receive);
+    if (S.perms.chooseFrom) {
+      $('sLoc').innerHTML = '<option value="">— choose —</option>' + S.locations.map(function (l) { return '<option value="' + esc(l.id) + '">' + esc(l.id) + ' · ' + esc(l.name) + '</option>'; }).join('');
+    }
+    var m = S.firstMode;
+    if (!m || (m === 'PICKUP' && !S.perms.pickup) || (m === 'RECEIVE' && !S.perms.receive) || (m === 'HANDOVER' && !S.perms.handover)) m = S.perms.receive ? 'RECEIVE' : 'PICKUP';
+    setMode(m);
+  }).catch(function (e) { if (!(e && e.extra && e.extra.auth)) msg('startMsg', esc(e.error || 'Cannot connect.'), 'bad'); });
+})();
+
+function setMode(m) {
+  S.mode = m;
+  $('mPick').classList.toggle('on', m === 'PICKUP');
+  $('mHand').classList.toggle('on', m === 'HANDOVER');
+  $('mRecv').classList.toggle('on', m === 'RECEIVE');
+  var carry = m === 'PICKUP' || m === 'HANDOVER';
+  $('sCarrierBox').classList.toggle('hidden', !carry);
+  if (carry && !$('sCarrier').value && !S.perms.handCarry) $('sCarrier').value = savedLorry();
+  $('sCarrier').placeholder = S.perms.handCarry ? 'Blank = I carry it myself' : 'e.g. JPK1234';
+  $('sLocBox').classList.toggle('hidden', !S.perms.chooseFrom || m === 'HANDOVER');
+  var where = S.perms.chooseFrom ? 'Choose the scan location.' : S.user.role.toUpperCase() === 'DRIVER' ? 'Pickup is recorded at the carton\'s current location.' : 'Scanning at <b>' + esc(S.user.locationId) + ' ' + esc(locName(S.user.locationId)) + '</b>';
+  $('sWhere').innerHTML = m === 'HANDOVER' ? 'Take over: scan each carton you receive from another driver or manager.' :
+    (m === 'PICKUP' ? 'Pickup: cartons leaving with you. ' : 'Receive: cartons arriving here. ') + where;
+  tripPreview();
+}
+
+function rememberLorry(v) { try { localStorage.setItem('pisb_lorry', v); } catch (e) {} }
+function savedLorry() { try { return localStorage.getItem('pisb_lorry') || ''; } catch (e) { return ''; } }
+function plateOf(v) { return String(v || '').toUpperCase().replace(/[\s.]+/g, ''); }
+function tripPreview() {
+  var p = plateOf($('sCarrier').value), d = new Date();
+  var ymd = d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2) + ('0' + d.getDate()).slice(-2);
+  $('sTrip').textContent = p ? 'Trip No.: ' + ymd + '-' + p
+    : (S.perms && S.perms.handCarry ? 'No lorry: cartons will be recorded as carried by you.' : 'Trip No. = today\'s date + lorry no.');
+}
+
+function precheck() {
+  var staff = $('sStaff').value.trim();
+  if (!staff) return 'Enter your Staff ID first.';
+  if (!S.user.staffId) store('scan_staff', staff);
+  if (S.mode === 'PICKUP' || S.mode === 'HANDOVER') {
+    var plate = plateOf($('sCarrier').value);
+    if (!plate && !S.perms.handCarry) return 'Enter the lorry number (plate) first.';
+    if (plate && !/^[A-Z0-9-]{2,15}$/.test(plate)) return 'Lorry number: letters and numbers only, e.g. JPK1234.';
+    if (plate) rememberLorry(plate);
+  }
+  if (S.perms.chooseFrom && S.mode !== 'HANDOVER' && !$('sLoc').value) return 'Choose the scan location first.';
+  return '';
+}
+
+// ---------- camera ----------
+var CAM = { stream: null, timer: null, busy: false, last: '', lastAt: 0, native: null, zx: null, torch: false };
+function startCamera() {
+  var err = precheck();
+  if (err) { msg('sStatus', esc(err)); return; }
+  msg('sStatus', '');
+  $('camState').textContent = 'Starting camera…';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('camState').textContent = 'This browser cannot open the camera. Use Chrome (Android) or Safari (iPhone).'; return; }
+  navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } })
+    .then(function (stream) {
+      CAM.stream = stream;
+      var v = $('video'); v.srcObject = stream; v.setAttribute('playsinline', ''); return v.play();
+    })
+    .then(function () { hide('camStart'); setupTorch(); return prepareDecoder(); })
+    .then(function () { $('camState').textContent = 'Point at the barcode - fill the white box'; loop(); })
+    .catch(function (e) {
+      $('camState').textContent = (e && e.name === 'NotAllowedError') ? 'Camera blocked - allow camera access for this page in the browser settings.' : 'Camera error: ' + ((e && e.message) || e);
+    });
+}
+function stopCamera() {
+  if (CAM.timer) clearTimeout(CAM.timer);
+  if (CAM.stream) CAM.stream.getTracks().forEach(function (t) { t.stop(); });
+  CAM.stream = null;
+}
+function setupTorch() {
+  try {
+    var track = CAM.stream.getVideoTracks()[0];
+    var caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.torch) show('torchBtn');
+  } catch (e) {}
+}
+function toggleTorch() {
+  var track = CAM.stream && CAM.stream.getVideoTracks()[0];
+  if (!track) return;
+  CAM.torch = !CAM.torch;
+  track.applyConstraints({ advanced: [{ torch: CAM.torch }] }).catch(function () {});
+}
+function prepareDecoder() {
+  if ('BarcodeDetector' in window) {
+    return BarcodeDetector.getSupportedFormats().then(function (f) {
+      if (f.indexOf('code_128') >= 0) CAM.native = new BarcodeDetector({ formats: ['code_128'] });
+      else return prepareZx();
+    }).catch(prepareZx);
+  }
+  return prepareZx();
+}
+// Barcode engine (zxing-wasm 3.1.7): from the jsDelivr CDN; if that is blocked, from our own server (Drive copy).
+var ZX_CDN = 'https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.7/dist/iife/reader/index.js';
+var ZX_SRI = 'sha384-/gvbTcLfb5Hgo1TmRNgfyUVUgf4ifdzlKH5ilySG5Qv3YE4y5YD7QJfzVDmuL37/';
+function loadScript(src, integrity) {
+  return new Promise(function (ok, fail) {
+    var sc = document.createElement('script'); sc.src = src; sc.crossOrigin = 'anonymous';
+    if (integrity) sc.integrity = integrity;
+    sc.onload = ok; sc.onerror = fail; document.head.appendChild(sc);
+  });
+}
+function prepareZx() {
+  if (CAM.zx) return CAM.zx;
+  $('camState').textContent = 'Loading barcode reader…';
+  var fromCdn = function () {
+    return loadScript(ZX_CDN, ZX_SRI).then(function () { return ZXingWASM.prepareZXingModule({ fireImmediately: true }); });
+  };
+  var fromServer = function () {
+    return call('apiGetDecoder', S.token).then(function (d) {
+      if (!window.ZXingWASM) { var sc = document.createElement('script'); sc.textContent = d.js; document.head.appendChild(sc); }
+      var bin = Uint8Array.from(atob(d.wasm), function (ch) { return ch.charCodeAt(0); }).buffer;
+      ZXingWASM.setZXingModuleOverrides({ wasmBinary: bin });
+      return ZXingWASM.prepareZXingModule({ fireImmediately: true });
+    });
+  };
+  CAM.zx = fromCdn().catch(fromServer);
+  CAM.zx.catch(function () { CAM.zx = null; });
+  return CAM.zx;
+}
+var canvas = document.createElement('canvas'), ctx2d = canvas.getContext('2d', { willReadFrequently: true });
+function loop() {
+  CAM.timer = setTimeout(function () {
+    if (!CAM.stream) return;
+    if (!$('alertBox').classList.contains('hidden') || CAM.busy) return loop();
+    CAM.busy = true;
+    decodeFrame().then(handleCode, function () {}).then(function () { CAM.busy = false; loop(); });
+  }, 160);
+}
+function decodeFrame() {
+  var v = $('video');
+  if (!v.videoWidth) return Promise.resolve(null);
+  if (CAM.native) return CAM.native.detect(v).then(function (r) { return r.length ? r[0].rawValue : null; });
+  // every other frame: the middle band (guide box, faster) / the whole picture (barcode not centred)
+  CAM.n = (CAM.n || 0) + 1;
+  var full = CAM.n % 2 === 0;
+  var w = v.videoWidth, h = v.videoHeight, cw = full ? w : Math.round(w * 0.9), ch = full ? h : Math.round(h * 0.5);
+  var scale = Math.min(1, 1000 / cw);
+  canvas.width = Math.round(cw * scale); canvas.height = Math.round(ch * scale);
+  ctx2d.drawImage(v, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, canvas.width, canvas.height);
+  var img = ctx2d.getImageData(0, 0, canvas.width, canvas.height);
+  return ZXingWASM.readBarcodes(img, { formats: ['Code128'], tryHarder: true, maxNumberOfSymbols: 1 })
+    .then(function (r) { return r && r.length && r[0].isValid ? r[0].text : null; });
+}
+function handleCode(text) {
+  if (!text) return;
+  var code = String(text).trim().toUpperCase();
+  if (!/^[A-Z0-9][A-Z0-9-]{2,39}$/.test(code)) return;
+  var now = Date.now();
+  if (code === CAM.last && now - CAM.lastAt < 4000) return;    // same label still in view
+  CAM.last = code; CAM.lastAt = now;
+  $('guide').classList.add('hit'); setTimeout(function () { $('guide').classList.remove('hit'); }, 350);
+  $('camState').textContent = 'Scanned ' + code;
+  enqueueScan(code);
+}
+
+// ---------- scanning queue ----------
+$('sInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submitTyped(); } });
+function submitTyped() { var v = $('sInput').value.trim(); $('sInput').value = ''; if (v) enqueueScan(v); }
+function enqueueScan(raw) {
+  var err = precheck();
+  if (err) { msg('sStatus', esc(err)); feedback('REJECTED'); return; }
+  msg('sStatus', '');
+  var req = { action: S.mode, cartonId: raw, staffId: $('sStaff').value.trim().toUpperCase(), carrier: plateOf($('sCarrier').value),
+    locationId: $('sLoc').value, deviceTime: new Date().toISOString(), idemKey: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10) };
+  var id = 'r' + req.idemKey;
+  feedback('QUEUED');
+  addResult(id, { result: 'PENDING', cartonId: raw.toUpperCase(), message: 'Sending…' });
+  S.queue = S.queue.then(function () {
+    return callWithRetry('apiScan', [S.token, req], 2).then(function (d) {
+      S.count[d.result] = (S.count[d.result] || 0) + 1;
+      addResult(id, d);
+      var al = alertFor(d);
+      if (al) pushAlert(al); else feedback(d.result);
+    }, function (e) {
+      addResult(id, { result: 'ERROR', cartonId: raw.toUpperCase(), message: (e && e.error) || 'Not saved - scan again.' });
+      feedback('REJECTED');
+    });
+  });
+}
+function addResult(id, d) {
+  var label = { OK: 'OK', DUPLICATE: 'ALREADY DONE', REJECTED: 'REJECTED', ERROR: 'NOT SAVED', PENDING: '…' }[d.result] || d.result;
+  var p = d.progress;
+  var prog = p ? '<div class="muted">Transfer ' + esc(d.transferId) + ': received ' + p.delivered + '/' + p.total + '</div>' : '';
+  var html = '<div class="res ' + esc(d.result) + '" id="' + id + '"><span class="tag">' + esc(label) + '</span><span class="cid">' + esc(d.cartonId) + '</span>' +
+    '<div>' + esc(d.message || '') + '</div>' + (d.warning ? '<div class="sev-MEDIUM">' + esc(d.warning) + '</div>' : '') + prog + '</div>';
+  var el = $(id);
+  if (el) el.outerHTML = html;
+  else { if (!$('sList').querySelector('.res')) $('sList').innerHTML = ''; $('sList').insertAdjacentHTML('afterbegin', html); }
+  $('sCounts').textContent = 'OK ' + (S.count.OK || 0) + ' · already ' + (S.count.DUPLICATE || 0) + ' · rejected ' + (S.count.REJECTED || 0);
+}
+
+// ---------- alerts (same rules as the main app) ----------
+function alertFor(d) {
+  var cid = d.cartonId || '';
+  var dest = '<b>' + esc(d.toId || '') + (d.toName ? ' ' + esc(d.toName) : '') + '</b>';
+  var told = d.notified ? 'Office operations have been e-mailed automatically.' : 'Please tell your manager now.';
+  if (d.result === 'OK' && d.warnType === 'MISSING_PICKUP_SCAN') {
+    var src = esc(d.fromId || d.cur || '');
+    return { level: 'warn', cid: cid, title: 'Received - but no pickup scan',
+      body: 'No driver or manager scanned Pickup when this carton left <b>' + src + '</b>. It is now recorded as received here, so you can keep it.', note: told };
+  }
+  if (d.result !== 'REJECTED') return null;
+  if (d.type === 'WRONG_LOCATION' && d.action === 'RECEIVE') {
+    return { level: 'bad', cid: cid, title: 'Wrong carton! Do not accept',
+      body: 'This carton belongs to ' + dest + ', not <b>' + esc(d.scanLoc) + '</b>. Give it back to the driver - do not keep it in the shop.', note: told };
+  }
+  if (d.type === 'WRONG_LOCATION') {
+    return { level: 'bad', cid: cid, title: 'This carton is not here',
+      body: 'The system shows this carton at <b>' + esc(d.cur) + '</b>, not <b>' + esc(d.scanLoc) + '</b>. Do not hand it over - ask your manager.', note: told };
+  }
+  if (d.type === 'UNKNOWN_CARTON') {
+    return { level: 'bad', cid: cid, title: 'Carton ID not found',
+      body: 'This carton ID is not registered. Check the label or scan again. If it still fails, tell your manager.', note: '' };
+  }
+  if (d.type === 'INVALID_TRANSITION' && d.action === 'PICKUP') {
+    return { level: 'bad', cid: cid, title: 'Already delivered',
+      body: 'This carton was already received at ' + dest + '. It cannot be picked up again.', note: told };
+  }
+  if (d.type === 'INVALID_TRANSITION' && d.action === 'HANDOVER') {
+    return { level: 'warn', cid: cid, title: 'Cannot take over', body: esc(d.message || ''), note: '' };
+  }
+  if (d.type === 'INVALID_TRANSITION') {
+    return { level: 'warn', cid: cid, title: 'Not sent out yet',
+      body: 'This carton is still at <b>' + esc(d.cur) + '</b>. A driver or manager must scan Pickup first.', note: '' };
+  }
+  return { level: 'bad', cid: cid, title: 'Scan rejected', body: esc(d.message || ''), note: '' };
+}
+function pushAlert(al) { S.alerts.push(al); if (S.alerts.length === 1) showAlert(); else updateAlertCount(); }
+function showAlert() {
+  var al = S.alerts[0];
+  $('alertCard').className = 'alert-card' + (al.level === 'warn' ? ' warn' : '');
+  $('alertTitle').innerHTML = al.title; $('alertCid').textContent = al.cid; $('alertBody').innerHTML = al.body; $('alertNote').textContent = al.note || '';
+  updateAlertCount(); show('alertBox'); alarm(al.level);
+}
+function updateAlertCount() { var more = S.alerts.length - 1; $('alertOk').textContent = 'OK, got it' + (more > 0 ? ' (' + more + ' more)' : ''); }
+$('alertOk').addEventListener('click', function () { S.alerts.shift(); if (S.alerts.length) showAlert(); else hide('alertBox'); });
+
+// ---------- sound / vibration ----------
+var AUDIO = null;
+function tone(freq, start, dur, type) {
+  AUDIO = AUDIO || new (window.AudioContext || window.webkitAudioContext)();
+  var o = AUDIO.createOscillator(), g = AUDIO.createGain(), t = AUDIO.currentTime + start;
+  o.type = type || 'sine'; o.frequency.value = freq; g.gain.value = 0.15; o.connect(g); g.connect(AUDIO.destination); o.start(t); o.stop(t + dur);
+}
+function feedback(result) {
+  try {
+    if (result === 'QUEUED') { tone(1400, 0, 0.06); return; }
+    if (navigator.vibrate) navigator.vibrate(result === 'OK' ? 60 : [120, 80, 120]);
+    tone(result === 'OK' ? 1200 : result === 'DUPLICATE' ? 700 : 300, 0, result === 'OK' ? 0.12 : 0.35);
+  } catch (e) {}
+}
+function alarm(level) {
+  try {
+    if (navigator.vibrate) navigator.vibrate(level === 'warn' ? [300, 150, 300] : [400, 150, 400, 150, 400]);
+    var n = level === 'warn' ? 2 : 4;
+    for (var i = 0; i < n; i++) tone(level === 'warn' ? 660 : (i % 2 ? 440 : 880), i * 0.28, 0.2, 'square');
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', function () { if (document.hidden) { stopCamera(); show('camStart'); $('camState').textContent = 'Camera off'; } });
+</script>
+</body>
+</html>

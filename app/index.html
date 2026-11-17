@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>PISB Carton Tracker</title>
+<meta name="apple-mobile-web-app-title" content="Carton Tracker">
+<meta name="theme-color" content="#DC2328">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<script>
+  // Home-screen shortcut opens this page with ?go=1 -> go straight to the app.
+  var APP_URL = 'https://script.google.com/macros/s/AKfycbwjt93lOBuQazCYolEepdole-W-nH1Q3mo1-ERYW1f4RLy4k55wNMrff_FRv4xTuwnS/exec';
+  if (/[?&]go=1\b/.test(location.search)) location.replace(APP_URL);
+</script>
+<style>
+  *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:#f4f4f6;color:#1d1d1f}
+  .wrap{max-width:440px;margin:0 auto;padding:28px 18px 40px;text-align:center}
+  .icon{width:132px;height:132px;border-radius:30px;box-shadow:0 4px 18px rgba(0,0,0,.15)}
+  h1{font-size:24px;margin:18px 0 4px} .sub{color:#6b6b70;margin:0 0 22px}
+  .btn{display:block;background:#DC2328;color:#fff;text-decoration:none;font-weight:700;font-size:18px;padding:16px;border-radius:14px}
+  .card{background:#fff;border-radius:16px;padding:16px 18px;margin-top:22px;text-align:left;font-size:15px;line-height:1.5}
+  .card h2{font-size:16px;margin:0 0 6px} .card ol{margin:0;padding-left:20px} .muted{color:#6b6b70;font-size:13px;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <img class="icon" src="../icon-512.png" alt="PISB Carton Tracker">
+  <h1>PISB Carton Tracker</h1>
+  <p class="sub">Carton labels &amp; outlet transfers</p>
+  <a class="btn" href="https://script.google.com/macros/s/AKfycbwjt93lOBuQazCYolEepdole-W-nH1Q3mo1-ERYW1f4RLy4k55wNMrff_FRv4xTuwnS/exec">Open Carton Tracker</a>
+  <div class="card">
+    <h2>Add to your phone (one time)</h2>
+    <b>Android (Chrome):</b>
+    <ol><li>Tap <b>&#8942;</b> (top right)</li><li>Tap <b>Add to Home screen</b> &rarr; <b>Add</b></li></ol>
+    <div style="height:10px"></div>
+    <b>iPhone (Safari):</b>
+    <ol><li>Tap the <b>Share</b> button</li><li>Tap <b>Add to Home Screen</b> &rarr; <b>Add</b></li></ol>
+  </div>
+  <p class="muted">Sign in with the Gmail registered for you in Carton Tracker.</p>
+</div>
+<script>
+  // So the iPhone shortcut (which saves the current address) opens the app directly.
+  try { history.replaceState(null, '', location.pathname + '?go=1'); } catch (e) {}
+</script>
+</body>
+</html>

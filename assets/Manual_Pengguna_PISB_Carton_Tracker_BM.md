@@ -98,10 +98,10 @@ Barang yang outlet pulangkan (contoh ke gudang PI02) **juga mesti ada label**. S
 
 1. Tab **Register** → tekan **Return** (butang ungu).
 2. **Transfer ID** keluar sendiri: **kod outlet + tarikh hari ini**, contoh `PI05-20261118`. Pulangan kedua hari yang sama: `PI05-20261118B`.
-3. **Return reason**: pilih **REPLACE**, **REPAIR**, **REJECT** atau **OTHER**.
+3. **Return reason**: pilih sebab (jadual di bawah). **RETURN SUPPLIER WITHOUT BILL**: isi juga **Supplier DO number**.
 4. **To**: biasanya **PI02 · WAREHOUSE** (sudah dipilih). Tukar jika perlu.
 5. **Total cartons**: berapa kotak / beg.
-6. **Notes**: tulis barang apa dan sebab (contoh "2 pasu pecah"). Wajib jika pilih OTHER.
+6. **Notes**: tulis barang apa dan sebab (contoh "2 pasu pecah"). **Wajib** untuk OTHER dan RETURN SUPPLIER WITHOUT BILL.
 7. **Next** → semak → **Register** → **Create label PDF** → cetak → tampal **satu label setiap kotak**.
 8. Serah kepada pemandu. Pemandu imbas **Pickup** seperti biasa; penerima imbas **Receive**.
 
@@ -110,6 +110,7 @@ Barang yang outlet pulangkan (contoh ke gudang PI02) **juga mesti ada label**. S
 | **REPLACE** | Barang rosak / salah — perlu ganti barang baru |
 | **REPAIR** | Barang rosak — hantar untuk dibaiki, kemudian dipulangkan semula |
 | **REJECT** | Barang ditolak / tidak mahu — pulangkan sahaja |
+| **RETURN SUPPLIER WITHOUT BILL** | Pulang kepada supplier tanpa bil. **Wajib** isi **DO number** + sebab dalam Notes. DO number keluar pada label |
 | **OTHER** | Sebab lain — tulis dalam Notes |
 
 Label pulangan tertulis **OUTLET RETURN** dan **REASON**. Pulangan **tidak dikira dalam Dashboard** — semak di tab **Transfers** (tanda ungu **RETURN**) atau **Lookup**.

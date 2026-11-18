@@ -61,15 +61,16 @@
   .alert-note { margin-top:12px; font-size:14px; font-weight:700; }
   .alert-card button { width:100%; margin-top:16px; padding:16px; font-size:18px; font-weight:800; border:0; border-radius:12px; background:var(--brand); color:#fff; }
   .alert-pause { margin-top:8px; font-size:13px; color:var(--muted); text-align:center; }
-  .toast { position:fixed; left:50%; top:38%; transform:translate(-50%,-50%) scale(.9); z-index:60; min-width:260px; max-width:86vw;
-    padding:22px 26px; border-radius:20px; text-align:center; color:#fff; background:#16a34a; box-shadow:0 12px 40px rgba(0,0,0,.35);
-    pointer-events:none; opacity:0; transition:opacity .15s, transform .15s; }
-  .toast.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
-  .toast.dup { background:#d97706; }
-  .toast .tk { font-size:54px; line-height:1; font-weight:900; }
-  .toast .tt { font-size:24px; font-weight:900; margin-top:6px; letter-spacing:.5px; }
-  .toast .tc { font-size:20px; font-weight:800; margin-top:6px; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .toast-ov { position:fixed; inset:0; z-index:60; background:rgba(17,24,39,.45); display:flex; align-items:center; justify-content:center; padding:20px; }
+  .toast { width:100%; max-width:360px; padding:24px 22px 20px; border-radius:22px; text-align:center; color:#fff; background:#16a34a;
+    box-shadow:0 12px 40px rgba(0,0,0,.35); animation:pop .15s ease-out; }
+  .toast.dup { background:#d97706; } .toast.err { background:#6b7280; }
+  .toast .tk { font-size:58px; line-height:1; font-weight:900; }
+  .toast .tt { font-size:26px; font-weight:900; margin-top:6px; letter-spacing:.5px; }
+  .toast .tc { font-size:22px; font-weight:800; margin-top:6px; font-family:ui-monospace,Menlo,Consolas,monospace; }
   .toast .ts { font-size:15px; font-weight:600; margin-top:4px; opacity:.95; }
+  .toast button { margin-top:18px; width:100%; padding:16px; font-size:20px; font-weight:900; border:0; border-radius:14px; background:#fff; color:#111827; }
+  @keyframes pop { from { transform:scale(.92); opacity:.4; } to { transform:scale(1); opacity:1; } }
   @keyframes shake { 0%,100% { transform:translateX(0); } 20%,60% { transform:translateX(-8px); } 40%,80% { transform:translateX(8px); } }
 </style>
 </head>
@@ -139,7 +140,8 @@
   </div>
 </main>
 
-<div id="toast" class="toast" role="status" aria-live="polite"><div class="tk" id="toastK">&#10003;</div><div class="tt" id="toastT">SCAN SUCCESSFUL</div><div class="tc" id="toastC"></div><div class="ts" id="toastS"></div></div>
+<div id="toastOv" class="toast-ov hidden"><div id="toast" class="toast" role="status" aria-live="polite"><div class="tk" id="toastK">&#10003;</div><div class="tt" id="toastT">SCAN SUCCESSFUL</div><div class="tc" id="toastC"></div><div class="ts" id="toastS"></div>
+  <button type="button" id="toastNext" onclick="nextScan()">SCAN NEXT &#9654;</button></div></div>
 <div id="alertBox" class="alert-ov hidden" role="alertdialog" aria-modal="true">
   <div class="alert-card" id="alertCard">
     <div class="alert-title" id="alertTitle"></div>
@@ -257,6 +259,7 @@ function precheck() {
 // ---------- camera ----------
 var CAM = { stream: null, timer: null, busy: false, last: '', lastAt: 0, native: null, zx: null, torch: false };
 function startCamera() {
+  CAM.hold = false; hide('toastOv');
   var err = precheck();
   if (err) { msg('sStatus', esc(err)); return; }
   msg('sStatus', '');
@@ -332,7 +335,7 @@ var canvas = document.createElement('canvas'), ctx2d = canvas.getContext('2d', {
 function loop() {
   CAM.timer = setTimeout(function () {
     if (!CAM.stream) return;
-    if (!$('alertBox').classList.contains('hidden') || CAM.busy) return loop();
+    if (!$('alertBox').classList.contains('hidden') || CAM.busy || CAM.hold) return loop();
     CAM.busy = true;
     decodeFrame().then(handleCode, function () {}).then(function () { CAM.busy = false; loop(); });
   }, 160);
@@ -360,8 +363,8 @@ function handleCode(text) {
   if (code === CAM.last && now - CAM.lastAt < 4000) return;    // same label still in view
   CAM.last = code; CAM.lastAt = now;
   $('guide').classList.add('hit'); setTimeout(function () { $('guide').classList.remove('hit'); }, 350);
-  $('camState').textContent = 'Scanned ' + code;
-  enqueueScan(code);
+  $('camState').textContent = 'Checking ' + code + '…';
+  if (enqueueScan(code)) CAM.hold = true;   // wait for the answer, then the user taps SCAN NEXT
 }
 
 // ---------- scanning queue ----------
@@ -375,7 +378,7 @@ $('mInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') { 
 
 function enqueueScan(raw, manual) {
   var err = precheck();
-  if (err) { msg('sStatus', esc(err)); feedback('REJECTED'); return; }
+  if (err) { msg('sStatus', esc(err)); feedback('REJECTED'); return false; }
   msg('sStatus', '');
   var req = { action: S.mode, cartonId: raw, staffId: $('sStaff').value.trim().toUpperCase(), carrier: plateOf($('sCarrier').value),
     locationId: $('sLoc').value, deviceTime: new Date().toISOString(), idemKey: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
@@ -393,8 +396,10 @@ function enqueueScan(raw, manual) {
     }, function (e) {
       addResult(id, { result: 'ERROR', cartonId: raw.toUpperCase(), message: (e && e.error) || 'Not saved - scan again.' });
       feedback('REJECTED');
+      showToast({ result: 'ERROR', cartonId: raw.toUpperCase() }, req.action);
     });
   });
+  return true;
 }
 function addResult(id, d) {
   var label = { OK: 'OK', DUPLICATE: 'ALREADY DONE', REJECTED: 'REJECTED', ERROR: 'NOT SAVED', PENDING: '…' }[d.result] || d.result;
@@ -452,7 +457,7 @@ function showAlert() {
   updateAlertCount(); show('alertBox'); alarm(al.level);
 }
 function updateAlertCount() { var more = S.alerts.length - 1; $('alertOk').textContent = 'OK, got it' + (more > 0 ? ' (' + more + ' more)' : ''); }
-$('alertOk').addEventListener('click', function () { S.alerts.shift(); if (S.alerts.length) showAlert(); else hide('alertBox'); });
+$('alertOk').addEventListener('click', function () { S.alerts.shift(); if (S.alerts.length) showAlert(); else { hide('alertBox'); CAM.hold = false; CAM.lastAt = Date.now(); } });
 
 // ---------- sound / vibration ----------
 var AUDIO = null;
@@ -461,21 +466,26 @@ function tone(freq, start, dur, type) {
   var o = AUDIO.createOscillator(), g = AUDIO.createGain(), t = AUDIO.currentTime + start;
   o.type = type || 'sine'; o.frequency.value = freq; g.gain.value = 0.15; o.connect(g); g.connect(AUDIO.destination); o.start(t); o.stop(t + dur);
 }
-// Big pop-up after each scan: green = saved, orange = already scanned. Does not stop scanning.
-var TOAST_T = null;
+// Pop-up after each scan: green = saved, orange = already scanned, grey = not saved.
+// Scanning waits until the user taps SCAN NEXT.
 function showToast(d, action) {
-  if (d.result !== 'OK' && d.result !== 'DUPLICATE') return;
-  var ok = d.result === 'OK';
+  var ok = d.result === 'OK', dup = d.result === 'DUPLICATE';
   var what = { PICKUP: 'Pickup', HANDOVER: 'Take over', RECEIVE: 'Receive' }[action] || '';
-  $('toast').classList.toggle('dup', !ok);
-  $('toastK').innerHTML = ok ? '&#10003;' : '&#8635;';
-  $('toastT').textContent = ok ? 'SCAN SUCCESSFUL' : 'ALREADY SCANNED';
+  $('toast').className = 'toast' + (dup ? ' dup' : ok ? '' : ' err');
+  $('toastK').innerHTML = ok ? '&#10003;' : dup ? '&#8635;' : '!';
+  $('toastT').textContent = ok ? 'SCAN SUCCESSFUL' : dup ? 'ALREADY SCANNED' : 'NOT SAVED';
   $('toastC').textContent = d.cartonId || '';
   var p = d.progress;
-  $('toastS').textContent = ok ? (what + ' OK' + (p && action === 'RECEIVE' ? ' \u00b7 ' + p.delivered + '/' + p.total + ' received' : '')) : 'No need to scan again';
-  $('toast').classList.add('show');
-  clearTimeout(TOAST_T);
-  TOAST_T = setTimeout(function () { $('toast').classList.remove('show'); }, ok ? 1600 : 1300);
+  $('toastS').textContent = ok ? (what + ' OK' + (p && action === 'RECEIVE' ? ' \u00b7 ' + p.delivered + '/' + p.total + ' received' : ''))
+    : dup ? 'No need to scan again' : 'No internet? Scan this carton again';
+  $('camState').textContent = 'Tap SCAN NEXT to continue';
+  show('toastOv');
+  setTimeout(function () { try { $('toastNext').focus(); } catch (e) {} }, 50);
+}
+function nextScan() {
+  hide('toastOv');
+  CAM.hold = false; CAM.lastAt = Date.now();     // same label still in front of the camera is ignored for a moment
+  $('camState').textContent = CAM.stream ? 'Point at the next barcode' : 'Camera off';
 }
 function feedback(result) {
   try {
